@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chicago Neighborhood Navigator</title>
+
+  <!-- Bootstrap 5 CSS + JS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+
+  <style>
+    /* Base page styling */
+    body { background-color: #f8f9fa; color: #212529; }
+
+    /* Card hover effect to create subtle shadow */
+    .card:hover { box-shadow: 0 4px 8px rgba(0,0,0,0.08); }
+
+    /* Card title styling */
+    .card-body h3 { font-weight: 600; margin-bottom: 0.5rem; color: #343a40; }
+
+    /* Sticky header below navbar (stay visible when scrolling) */
+    header.sticky-top { top: 56px; z-index: 1020; }
+  </style>
+</head>
+<body>
+
+  <!-- Navbar: top navigation bar with Browse/Favorites and login/logout controls -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="#">Chicago Navigator</a>
+
+      <!-- Hamburger menu for small screens -->
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMain">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <!-- Left side: Browse/favorite | Right side: Auth controls -->
+      <div id="navMain" class="collapse navbar-collapse">
+        <ul class="navbar-nav me-auto">
+          <li class="nav-item"><a class="nav-link active" href="#" data-view="browse">Browse</a></li>
+          <li class="nav-item"><a class="nav-link" href="#" data-view="favorites">Favorites</a></li>
+        </ul>
+        <div id="authControls" class="d-flex align-items-center"></div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Page header with title, description, and dynamic result count -->
+  <header class="border-bottom sticky-top bg-light">
+    <div class="container py-4">
+      <h1 class="h3 mb-1">Browse Chicago Neighborhoods</h1>
+      <p class="text-muted mb-0">Filter by crime level, affordability, and region</p>
+      <div class="text-muted mt-2"><span id="resultCount">0</span> results</div>
+    </div>
+  </header>
+
+  <!-- Filters: lets user filter neighborhoods -->
+  <section id="filtersSection" class="container my-4">
+    <form id="filtersForm" class="row g-3">
+      <!-- Crime filter dropdown -->
+      <div class="col-md-4">
+        <label for="filterCrime" class="form-label">Crime level</label>
+        <select id="filterCrime" class="form-select">
+          <option value="">Any</option>
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+        </select>
+      </div>
+
+      <!-- Affordability filter dropdown -->
+      <div class="col-md-4">
+        <label for="filterAfford" class="form-label">Affordability</label>
+        <select id="filterAfford" class="form-select">
+          <option value="">Any</option>
+          <option value="affordable">Affordable</option>
+          <option value="moderate">Moderate</option>
+          <option value="expensive">Expensive</option>
+        </select>
+      </div>
+
+      <!-- Region filter dropdown -->
+      <div class="col-md-4">
+        <label for="filterRegion" class="form-label">Region</label>
+        <select id="filterRegion" class="form-select">
+          <option value="">Any</option>
+          <option>North Side</option>
+          <option>South Side</option>
+          <option>West Side</option>
+          <option>Central</option>
+        </select>
+      </div>
+
+      <!-- Filter buttons -->
+      <div class="col-12 d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Apply filters</button>
+        <button type="reset" class="btn btn-outline-secondary">Reset</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Neighborhoods display grid -->
+  <section id="neighborhoodsSection" class="container">
+    <div id="neighborhoodGrid" class="row g-3"></div>
+  </section>
+
+  <!-- Favorites view -->
+  <section id="favoritesSection" class="container my-4 d-none">
+    <h2 class="h5 mb-3">My favorites</h2>
+    <div id="favoritesGrid" class="row g-3"></div>
+    <div id="favoritesEmpty" class="alert alert-info d-none mt-3"></div>
+  </section>
+
+  <!-- Neighborhood detail modal: shows full info when user clicks "View" -->
+  <div class="modal fade" id="neighborhoodModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="detailName" class="h5 mb-0">Neighborhood details</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <!-- Detailed neighborhood info (add/remove elements depending on tables we actually work with)-->
+          <ul class="list-group list-group-flush">
+            <li class="list-group-item">Description: <span id="detailDescription"></span></li>
+            <li class="list-group-item">Population: <span id="detailPopulation"></span></li>
+            <li class="list-group-item">Median income: <span id="detailIncome"></span></li>
+            <li class="list-group-item">Region: <span id="detailRegion"></span></li>
+            <li class="list-group-item">Crime level: <span id="detailCrimeLevel"></span></li>
+            <li class="list-group-item">Incidents: <span id="detailCrimeIncidents"></span></li>
+            <li class="list-group-item">Median rent: <span id="detailMedianRent"></span></li>
+            <li class="list-group-item">Median home value: <span id="detailMedianHome"></span></li>
+            <li class="list-group-item">Affordability: <span id="detailAffordCategory"></span></li>
+          </ul>
+        </div>
+        <div class="modal-footer">
+          <!-- Buttons for managing favorites -->
+          <button id="btnAddFavorite" type="button" class="btn btn-primary">Add to favorites</button>
+          <button id="btnRemoveFavorite" type="button" class="btn btn-outline-danger d-none">Remove favorite</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Login modal: email/password form -->
+  <div class="modal fade" id="loginModal" tabindex="-1">
+    <div class="modal-dialog">
+      <form id="loginForm" class="modal-content">
+        <div class="modal-header">
+          <h2 class="h5 mb-0">Login</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <!-- Login inputs -->
+          <input id="loginEmail" type="email" class="form-control mb-2" placeholder="Email" required>
+          <input id="loginPassword" type="password" class="form-control mb-2" placeholder="Password" required>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Log in</button>
+          <!-- Add sign up option for new users -->
+          <a href="#" class="ms-auto small" data-bs-toggle="modal" data-bs-target="#signupModal" data-bs-dismiss="modal">New user? Sign up</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Sign Up modal: name/email/password form for new users -->
+  <div class="modal fade" id="signupModal" tabindex="-1">
+    <div class="modal-dialog">
+      <form id="signupForm" class="modal-content">
+        <div class="modal-header">
+          <h2 class="h5 mb-0">Sign Up</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input id="signupName" type="text" class="form-control mb-2" placeholder="Name" required>
+          <input id="signupEmail" type="email" class="form-control mb-2" placeholder="Email" required>
+          <input id="signupPassword" type="password" class="form-control mb-2" placeholder="Password" required>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-success">Create account</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // ----------------------------
+    // State and helper functions
+    // ----------------------------
+    let user = null;                  // Stores current logged-in user info
+    const favorites = new Set();      // Tracks user's favorite neighborhoods
+    let currentDetail = null;         // Currently selected neighborhood in modal
+
+    const currency = n => `$${n.toLocaleString()}`;                     // Format as currency
+    const capitalize = s => s.charAt(0).toUpperCase() + s.slice(1);     // Capitalize first letter
+    const isLoggedIn = () => !!user;                                    // Check login state
+
+    // ----------------------------
+    // Mock neighborhood data (DEV mode)
+    // ----------------------------
+    const MOCK_NEIGHBORHOODS = [        // Add/remove elements based on tables we work with
+      { name:'Lincoln Park', description:'Urban park along Lake Michigan', population:68000, median_income:95000, region:'North Side', crime:{level:'medium', incidents:3200}, affordability:{median_rent:2100, median_home:650000, category:'expensive'} },
+      { name:'Hyde Park', description:'Historic South Side neighborhood', population:26000, median_income:72000, region:'South Side', crime:{level:'medium', incidents:2800}, affordability:{median_rent:1600, median_home:380000, category:'moderate'} },
+      { name:'Pilsen', description:'Arts and culture West Side neighborhood', population:35000, median_income:55000, region:'West Side', crime:{level:'high', incidents:4300}, affordability:{median_rent:1200, median_home:250000, category:'affordable'} },
+      { name:'The Loop', description:'Central business district with iconic architecture', population:33000, median_income:90000, region:'Central', crime:{level:'medium', incidents:2200}, affordability:{median_rent:2500, median_home:600000, category:'expensive'} }
+    ];
+
+    // ----------------------------
+    // Update authentication controls in navbar
+    // ----------------------------
+    function updateAuthUI() {
+      const auth = document.getElementById('authControls');
+      // If logged out, show Login button
+      if (!isLoggedIn()) {
+        auth.innerHTML = `<a id="loginBtn" class="btn btn-primary btn-sm" href="#" data-bs-toggle="modal" data-bs-target="#loginModal">Login</a>`;
+      } else {
+        // If logged in, show Logout button & email to indicate logged in
+        auth.innerHTML = `
+          <div class="d-flex align-items-center gap-2">
+            <div class="px-3 py-1 bg-light border rounded-pill small fw-semibold">${user.email}</div>
+            <button id="logoutBtn" class="btn btn-outline-light btn-sm">Logout</button>
+          </div>`;
+        document.getElementById("logoutBtn").onclick = () => {
+          user = null;
+          favorites.clear();
+          updateAuthUI();
+          renderNeighborhoods();
+          renderFavorites();
+        };
+      }
+    }
+
+    // ----------------------------
+    // Fetch neighborhoods with optional filters
+    // ----------------------------
+    async function fetchNeighborhoods(filters={}) {
+      // Filter mock data based on selected filters
+      return MOCK_NEIGHBORHOODS.filter(n =>
+        (!filters.crime || n.crime.level===filters.crime) &&
+        (!filters.afford || n.affordability.category===filters.afford) &&
+        (!filters.region || n.region===filters.region)
+      );
+    }
+
+    // ----------------------------
+    // Render neighborhood grid
+    // ----------------------------
+    async function renderNeighborhoods(filters={}) {
+      const list = await fetchNeighborhoods(filters);
+      const grid = document.getElementById('neighborhoodGrid');
+      grid.innerHTML = '';
+
+      // Loop through neighborhoods to create cards dynamically
+      list.forEach(n => {
+        const isFav = favorites.has(n.name);
+        const canFav = isLoggedIn();
+        const col = document.createElement('div');
+        col.className = 'col-sm-6 col-lg-4';
+        col.innerHTML = `
+          <div class="card h-100">
+            <div class="card-body">
+              <h3 class="h5 card-title mb-2">${n.name}</h3>
+              <div class="small text-muted mb-1">${n.description}</div>
+              <div class="small text-muted">Pop: ${n.population.toLocaleString()} · Income: ${currency(n.median_income)}</div>
+              <div class="mt-2">
+                <span class="badge bg-${n.crime.level==='low'?'success':n.crime.level==='medium'?'warning':'danger'}">Crime: ${capitalize(n.crime.level)}</span>
+                <span class="badge bg-${n.affordability.category==='affordable'?'success':n.affordability.category==='moderate'?'warning':'danger'}">Afford: ${capitalize(n.affordability.category)}</span>
+              </div>
+            </div>
+            <div class="card-footer bg-transparent d-flex gap-2">
+              <button class="btn btn-sm btn-outline-primary" onclick="openDetail('${n.name}')">View</button>
+              <button class="btn btn-sm ${isFav?'btn-danger':'btn-outline-secondary'} ${canFav?'':'disabled'}" onclick="onFavoriteClick('${n.name}')">
+                ${isFav?'Remove favorite':'Add favorite'}
+              </button>
+            </div>
+          </div>`;
+        grid.appendChild(col);
+      });
+
+      // Update result count in header
+      document.getElementById('resultCount').textContent = list.length;
+    }
+
+    // ----------------------------
+    // Open detail modal
+    // ----------------------------
+    async function openDetail(name) {
+      const list = await fetchNeighborhoods();
+      const n = list.find(x=>x.name===name);
+      if (!n) return;
+      currentDetail = n;
+
+      // Populate modal with neighborhood details (add/remove elements based on tables)
+      document.getElementById('detailName').textContent = n.name;
+      document.getElementById('detailDescription').textContent = n.description || 'No description available';
+      document.getElementById('detailPopulation').textContent = n.population.toLocaleString();
+      document.getElementById('detailIncome').textContent = currency(n.median_income);
+      document.getElementById('detailRegion').textContent = n.region;
+      document.getElementById('detailCrimeLevel').textContent = capitalize(n.crime.level);
+      document.getElementById('detailCrimeIncidents').textContent = n.crime.incidents.toLocaleString();
+      document.getElementById('detailMedianRent').textContent = currency(n.affordability.median_rent);
+      document.getElementById('detailMedianHome').textContent = currency(n.affordability.median_home);
+      document.getElementById('detailAffordCategory').textContent = capitalize(n.affordability.category);
+
+      // Adjust "Favorites" button depending on login state
+      const addBtn = document.getElementById('btnAddFavorite');
+      const removeBtn = document.getElementById('btnRemoveFavorite');
+      if (!isLoggedIn()) {
+        addBtn.classList.remove('d-none'); addBtn.disabled = true; addBtn.textContent='Login to favorite';
+        removeBtn.classList.add('d-none');
+      } else {
+        const isFav = favorites.has(n.name);
+        addBtn.classList.toggle('d-none', isFav); addBtn.disabled = false; addBtn.textContent='Add to favorites';
+        removeBtn.classList.toggle('d-none', !isFav); removeBtn.disabled = false;
+      }
+
+      // Show the modal
+      new bootstrap.Modal(document.getElementById('neighborhoodModal')).show();
+    }
+
+    // ----------------------------
+    // Favorite management
+    // ----------------------------
+    function onFavoriteClick(name) {
+      // If not logged in, show login modal
+      if (!isLoggedIn()) return new bootstrap.Modal(document.getElementById('loginModal')).show();
+      toggleFavorite(name);
+    }
+
+    function toggleFavorite(name) {
+      // Add/remove from favorites set
+      favorites.has(name) ? favorites.delete(name) : favorites.add(name);
+      renderNeighborhoods();
+      renderFavorites();
+
+      // Update modal buttons if detail modal open
+      if (currentDetail && currentDetail.name === name) {
+        const addBtn = document.getElementById('btnAddFavorite');
+        const removeBtn = document.getElementById('btnRemoveFavorite');
+        const isFav = favorites.has(name);
+        addBtn.classList.toggle('d-none', isFav);
+        removeBtn.classList.toggle('d-none', !isFav);
+      }
+    }
+
+    // ----------------------------
+    // Render favorites view
+    // ----------------------------
+    async function renderFavorites() {
+      const grid = document.getElementById('favoritesGrid');
+      const empty = document.getElementById('favoritesEmpty');
+      grid.innerHTML = '';
+
+      // If not logged in, show message prompting user to log in
+      if (!isLoggedIn()) {
+        empty.className = 'alert alert-warning mt-3';
+        empty.textContent = 'Please log in to view and manage favorites.';
+        empty.classList.remove('d-none');
+        return;
+      }
+
+      empty.classList.add('d-none');
+
+      // Loop through favorites and render them
+      for (const name of favorites) {
+        const n = MOCK_NEIGHBORHOODS.find(x => x.name===name);
+        if (!n) continue;
+
+        const col = document.createElement('div'); col.className='col-sm-6 col-lg-4';
+        col.innerHTML = `
+          <div class="card h-100">
+            <div class="card-body">
+              <h3 class="h5 card-title mb-2">${n.name}</h3>
+              <div class="small text-muted mb-1">${n.description}</div>
+              <div class="small text-muted">Pop: ${n.population.toLocaleString()} · Income: ${currency(n.median_income)}</div>
+            </div>
+            <div class="card-footer bg-transparent d-flex gap-2">
+              <button class="btn btn-sm btn-outline-primary" onclick="openDetail('${n.name}')">View</button>
+              <button class="btn btn-sm btn-danger" onclick="onFavoriteClick('${n.name}')">Remove favorite</button>
+            </div>
+          </div>`;
+        grid.appendChild(col);
+      }
+
+      // Message logic to indicate no neighborhoods marked as favorite
+      if (favorites.size === 0) {
+        empty.className = 'alert alert-info mt-3';
+        empty.textContent = 'You haven’t added any favorites yet.';
+        empty.classList.remove('d-none');
+      }
+    }
+
+    // ----------------------------
+    // Filters form submit/reset
+    // ----------------------------
+    document.getElementById('filtersForm').onsubmit = e=>{
+      e.preventDefault();
+      // Grab filter values from dropdown menus
+      const filters = {
+        crime: document.getElementById('filterCrime').value,
+        afford: document.getElementById('filterAfford').value,
+        region: document.getElementById('filterRegion').value
+      };
+      renderNeighborhoods(filters); // Re-render the grid with applied filters
+    };
+    document.getElementById('filtersForm').onreset = ()=>setTimeout(()=>renderNeighborhoods(),0);
+
+    // ----------------------------
+    // View switching (Browse/Favorites)
+    // ----------------------------
+    document.querySelectorAll('[data-view]').forEach(link=>link.onclick=e=>{
+      e.preventDefault();
+      const view=link.dataset.view;
+
+      // Toggle sections depending on which tab was clicked
+      document.getElementById('favoritesSection').classList.toggle('d-none', view!=='favorites');
+      document.getElementById('filtersSection').classList.toggle('d-none', view==='favorites');
+      document.getElementById('neighborhoodsSection').classList.toggle('d-none', view==='favorites');
+      if(view==='favorites') renderFavorites(); else renderNeighborhoods();
+      document.querySelectorAll('[data-view]').forEach(l=>l.classList.toggle('active', l===link));
+    });
+
+    // ----------------------------
+    // Login form
+    // ----------------------------
+    document.getElementById('loginForm').onsubmit = e=>{
+      e.preventDefault();
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value.trim();
+      // If all fields filled, update user state and UI
+      if (email && password) {
+        user = {email};
+        updateAuthUI();
+        bootstrap.Modal.getInstance(document.getElementById('loginModal')).hide();
+        renderNeighborhoods();
+      }
+    };
+
+    // ----------------------------
+    // Sign Up form
+    // ----------------------------
+    document.getElementById('signupForm').onsubmit = e => {
+    e.preventDefault();
+    const name = document.getElementById('signupName').value.trim();
+    const email = document.getElementById('signupEmail').value.trim();
+    const password = document.getElementById('signupPassword').value.trim();
+
+    // If all fields filled, update user state and UI
+    if (name && email && password) {
+        user = { name, email };
+        updateAuthUI();
+        bootstrap.Modal.getInstance(document.getElementById('signupModal')).hide();
+        renderNeighborhoods();
+      }
+    };
+
+    // ----------------------------
+    // Modal favorite buttons
+    // ----------------------------
+    document.getElementById('btnAddFavorite').onclick = ()=>{ if(currentDetail) toggleFavorite(currentDetail.name); };
+    document.getElementById('btnRemoveFavorite').onclick = ()=>{ if(currentDetail) toggleFavorite(currentDetail.name); };
+
+    // ----------------------------
+    // Initial render
+    // ----------------------------
+    updateAuthUI();         // Show login button OR user info with log out button
+    renderNeighborhoods();  // Load initial set of neighborhoods
+
+  </script>
+</body>
+</html>
